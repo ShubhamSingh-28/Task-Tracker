@@ -39,39 +39,32 @@ CREATE OR REPLACE PACKAGE BODY task_search_pkg AS
         p_results     OUT task_cursor,
         p_total_count OUT NUMBER
     ) IS
-        v_term   VARCHAR2(257);
+        v_term   VARCHAR2(1000);
         v_offset NUMBER;
     BEGIN
-        v_term   := '%' || LOWER(NVL(p_search_term, '')) || '%';
-        v_offset := (p_page - 1) * p_page_size;
+        -- cap length to 100 chars and escape LIKE wildcards ('!' is the escape char)
+        v_term   := '%' ||
+                    REPLACE(REPLACE(REPLACE(LOWER(SUBSTR(NVL(p_search_term, ''), 1, 100)),
+                            '!', '!!'), '%', '!%'), '_', '!_') || '%';
+        v_offset := (GREATEST(NVL(p_page, 1), 1) - 1) * NVL(p_page_size, 10);
 
         -- Total count for pagination metadata
         SELECT COUNT(*)
           INTO p_total_count
           FROM tasks
          WHERE archived = 0
-           AND LOWER(title) LIKE v_term
-            OR LOWER(description) LIKE v_term
+           AND (LOWER(title) LIKE v_term ESCAPE '!' OR LOWER(description) LIKE v_term ESCAPE '!')
            AND (p_status IS NULL OR status = p_status);
 
-        -- Paginated results using ROWNUM (pre-12c pattern)
+        -- Paginated results using OFFSET/FETCH (Oracle 12c+)
         OPEN p_results FOR
             SELECT id, title, description, status, priority, assignee, created_at
-              FROM (
-                  SELECT t.*, ROWNUM AS rn
-                    FROM (
-                        SELECT id, title, description, status, priority,
-                               assignee, created_at
-                          FROM tasks
-                         WHERE archived = 0
-                           AND LOWER(title) LIKE v_term
-                            OR LOWER(description) LIKE v_term
-                           AND (p_status IS NULL OR status = p_status)
-                         ORDER BY created_at DESC
-                    ) t
-                   WHERE ROWNUM <= v_offset + p_page_size
-              )
-             WHERE rn > v_offset;
+              FROM tasks
+             WHERE archived = 0
+               AND (LOWER(title) LIKE v_term ESCAPE '!' OR LOWER(description) LIKE v_term ESCAPE '!')
+               AND (p_status IS NULL OR status = p_status)
+             ORDER BY created_at DESC, id DESC
+            OFFSET v_offset ROWS FETCH NEXT NVL(p_page_size, 10) ROWS ONLY;
 
     END search_tasks;
 

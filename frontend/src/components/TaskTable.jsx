@@ -1,18 +1,22 @@
 export default function TaskTable({ tasks, loading, error }) {
-  if (loading) {
-    return <div className="state-message">Loading tasks...</div>;
-  }
-
   if (error) {
     return <div className="state-message error">Error: {error}</div>;
   }
 
-  if (!tasks || tasks.length === 0) {
+  const hasRows = tasks && tasks.length > 0;
+
+  // Only show the full-page loading message on the first load;
+  // afterwards keep the old rows visible (dimmed) to avoid flicker.
+  if (loading && !hasRows) {
+    return <div className="state-message">Loading tasks...</div>;
+  }
+
+  if (!hasRows) {
     return <div className="state-message">No tasks found.</div>;
   }
 
   return (
-    <table className="task-table">
+    <table className="task-table" style={{ opacity: loading ? 0.5 : 1 }}>
       <thead>
         <tr>
           <th>ID</th>

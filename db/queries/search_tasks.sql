@@ -3,12 +3,12 @@
 --
 -- Parameters:
 --   :term   — search term wrapped in wildcards, e.g. '%api%'
+--             (%, _ and ! inside the user's text are escaped with '!')
 --   :status — status filter or NULL for all statuses
 
 SELECT *
 FROM tasks
 WHERE archived = FALSE
-  AND LOWER(title) LIKE :term
-   OR LOWER(description) LIKE :term
+  AND (LOWER(title) LIKE :term ESCAPE '!' OR LOWER(description) LIKE :term ESCAPE '!')
   AND (:status IS NULL OR status = :status)
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, id DESC;
